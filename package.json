@@ -1,0 +1,23 @@
+{
+  "name": "elm",
+  "version": "0.0.1",
+  "description": "Just an elm playground",
+  "main": "Gulpfile.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Saniamos/tryingElm.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Saniamos/tryingElm/issues"
+  },
+  "homepage": "https://github.com/Saniamos/tryingElm#readme",
+  "dependencies": {
+    "gulp": "*",
+    "gulp-docker": "*"
+  }
+}

@@ -9,6 +9,7 @@ type Cell
  | Label
  | Formula Expr
 
+type alias Coor = (Int, Int)
 
 type Expr
   = Add Expr Expr
@@ -16,12 +17,50 @@ type Expr
   | Mult Expr Expr
   | Div Expr Expr
   | Num Float
-  | Ref Int Int
+  | Ref Coor
 
-type alias Model = List (List Cell)
+
+type alias Spreadsheet = 
+  { lookup : Coor -> Cell
+  , rows : Int 
+  , cols : Int 
+  }
+
+
+type alias Model = Spreadsheet
+
+
+emptyLookUp : Coor -> Cell
+emptyLookUp _ = Empty
+
+empty : Spreadsheet
+empty =
+  { lookup = emptyLookUp
+  , rows = 0
+  , cols = 0 
+  }
+
+addRow : Spreadsheet -> Spreadsheet
+addRow sheet =
+  { sheet | rows = rows + 1 }
+
+addColumn : Spreadsheet -> Spreadsheet
+addColumn sheet =
+  { sheet | cols = cols + 1 }
+
+
+set : Spreadsheet -> Coor -> Cell -> Spreadsheet
+set sheet (x, y) val =
+  case x < sheet.rows 
+    |> ((&&) x > 0)
+    
+
+get : Spreadsheet -> Coor -> Cell
+
+
 
 init : (Model, Cmd Msg)
-init = ([ [ Empty ] ], Cmd.none) 
+init = ( empty , Cmd.none ) 
 
 update : Msg -> Model -> Model
 update msg model = model
