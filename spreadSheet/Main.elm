@@ -1,8 +1,8 @@
 module Main exposing (..)
 
-import Html exposing (Html, program, div, table, tbody, tr, td, text, button)
-import Html.Attributes exposing (attribute, style)
-import Html.Events exposing (onClick)
+import Html exposing (Html, program, div, table, tbody, tr, td, text, button, input)
+import Html.Attributes as Attributes exposing (attribute, style)
+import Html.Events exposing (onClick, onDoubleClick, onInput)
 
 import List
 
@@ -11,6 +11,8 @@ type Msg
   | AddRow
   | AddCol
   | Reset
+  | ChangeMode Mode
+  | ChangeValue Coor String
 
 type Cell
  = Empty
@@ -25,7 +27,6 @@ type Expr
   | Mult Expr Expr
   | Div Expr Expr
   | Num Float
-  | Ref Coor
 
 
 type alias Spreadsheet = 
@@ -34,18 +35,23 @@ type alias Spreadsheet =
   , cols : Int 
   }
 
+type Mode 
+  = View
+  | Edit
 
-type alias Model = Spreadsheet
-
+type alias Model = 
+  { data : Spreadsheet
+  , mode : Mode  
+  }
 
 emptyLookUp : Coor -> Cell
 emptyLookUp _ = Empty
 
-empty : Spreadsheet
-empty =
+emptySheet : Spreadsheet
+emptySheet =
   { lookup = emptyLookUp
-  , rows = 5
-  , cols = 5 
+  , rows = 2
+  , cols = 2 
   }
 
 addRow : Spreadsheet -> Spreadsheet
@@ -87,21 +93,48 @@ get : Spreadsheet -> Coor -> Cell
 get sheet = sheet.lookup
 
 
+evalExpr : Expr -> Float
+evalExpr e =
+  case e of 
+    Add a b -> 
+      (evalExpr a) + (evalExpr b)
+    Sub a b -> 
+      (evalExpr a) - (evalExpr b)
+    Mult a b -> 
+      (evalExpr a) * (evalExpr b)
+    Div a b -> 
+      (evalExpr a) / (evalExpr b)
+    Num a ->
+      a
+
+empty : Model
+empty =
+  { data = emptySheet
+  , mode = View 
+  }
+
 
 init : ( Model, Cmd Msg )
 init = ( empty , Cmd.none ) 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model = 
-  case msg of 
-    AddRow -> 
-      ( addRow model, Cmd.none )
-    AddCol ->
-      ( addCol model, Cmd.none )
-    Reset -> 
-      init
-    None ->
-      ( model, Cmd.none ) 
+update msg model =
+  let 
+    sheet = model.data
+  in 
+    case msg of 
+      AddRow -> 
+        ( { model | data = addRow sheet }, Cmd.none )
+      AddCol ->
+        ( { model | data = addCol sheet }, Cmd.none )
+      ChangeValue c s ->
+        ( { model | data = set sheet c (Label s) }, Cmd.none )
+      ChangeMode m ->
+        ( { model | mode = m }, Cmd.none )
+      Reset -> 
+        init
+      None ->
+        ( model, Cmd.none ) 
 
 
 evalCell : Cell -> String
@@ -110,41 +143,75 @@ evalCell c =
     Empty ->
       ""
     Formula e ->
-      "Some Formula"
+      evalExpr e
+        |> toString
     Label s ->
       s
 
+viewCell: Mode -> Coor -> Cell -> Html Msg
+viewCell m coor c =
+  case m of
+    View ->
+     td 
+      [ style [ ("padding", "10px") ] 
+      , onDoubleClick (ChangeMode Edit)
+      ] 
+      [ evalCell c
+        |> text
+      ] 
+    Edit ->
+      td 
+      [ style [ ("padding", "10px") ] 
+      , onDoubleClick (ChangeMode View)
+      ] 
+      [ input 
+        [ onInput (ChangeValue coor)
+        , evalCell c
+          |> Attributes.value
+        ]
+        [] 
+      ] 
 
-viewCells : Spreadsheet -> Int -> Html Msg
-viewCells s x =
+
+viewCells : Model -> Int -> Html Msg
+viewCells model x =
   let 
+    s = model.data
     cols = List.range 1 s.cols
     getVal = 
-      \y-> td [ style [ ("padding", "10px") ] ] 
-        [ get s (x, y)
-          |> evalCell
-          |> text
-        ]
+      \y-> get s (x, y)
+        |> viewCell model.mode (x, y)
   in
     tr [] (List.map getVal cols)
 
-viewRows : Spreadsheet -> Html Msg
-viewRows s =
+viewRows : Model -> Html Msg
+viewRows model =
   let 
+    s = model.data
     rows = List.range 1 s.rows
-    buildCells = viewCells s
+    buildCells = viewCells model
   in
     tbody [] (List.map buildCells rows)
 
 
+toggleViewMode : Mode -> Mode
+toggleViewMode m =
+  case m of
+    View -> Edit
+    Edit -> View
+
 view : Model -> Html Msg
-view model = 
-  div [] 
-  [ button [ onClick AddRow ] [ text "Add row"]
-  , button [ onClick AddCol ] [ text "Add column"]
-  , button [ onClick Reset ] [ text "Reset"]
-  , table [ attribute "border" "1"] [ viewRows model ]
-  ]
+view model =
+  let 
+    otherMode = toggleViewMode model.mode
+  in
+    div [] 
+    [ button [ onClick (ChangeMode otherMode) ] [ toString otherMode |> text ]
+    , button [ onClick AddRow ] [ text "Add row"]
+    , button [ onClick AddCol ] [ text "Add column"]
+    , button [ onClick Reset ] [ text "Reset"]
+    , table [ attribute "border" "1"] [ viewRows model ]
+    ]
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
