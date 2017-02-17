@@ -5,6 +5,12 @@ import Html.Attributes as Attributes exposing (attribute, style)
 import Html.Events exposing (onClick, onDoubleClick, onInput)
 
 import List
+import String
+
+
+--import Parser exposing (Parser)
+--import Parser.Char
+--import Parser.Number
 
 type Msg 
   = None
@@ -45,7 +51,7 @@ type alias Model =
   }
 
 emptyLookUp : Coor -> Cell
-emptyLookUp _ = Empty
+emptyLookUp _ = Formula (Mult (Num 5) (Add (Num 3) (Num 5)))
 
 emptySheet : Spreadsheet
 emptySheet =
@@ -93,6 +99,51 @@ get : Spreadsheet -> Coor -> Cell
 get sheet = sheet.lookup
 
 
+{- remove withespaces and outer brackets
+-}
+prepareSubFormula : String -> String
+prepareSubFormula s =
+  String.trim s
+    |> String.dropLeft 1
+    |> String.dropRight 1
+
+{- okay, since the Parser package does not work with elm 0.18 atm and I don't really feel like going back to 0.17 
+  i'll just write a old fashioned recursive function
+-}
+parseFormula : String -> Maybe Expr
+parseFormula s =
+  case (String.uncons s) of
+    Just ('+', rest) ->
+      parseFormula (prepareSubFormula rest)
+    _ -> 
+      let 
+        f = String.toFloat s
+      in
+        case f of
+          Ok v ->
+            Just (Num v)
+          _ ->
+            Nothing
+          
+
+
+interpretInput : String -> Cell
+interpretInput s =
+  case (String.uncons s) of
+    Just ('=', rest) ->
+      let 
+        parsed = parseFormula rest
+      in 
+        case parsed of
+          Nothing ->
+            Label s
+          Just f ->
+            Formula f
+    Just _ ->
+      Label s
+    Nothing ->
+      Empty
+
 evalExpr : Expr -> Float
 evalExpr e =
   case e of 
@@ -106,6 +157,21 @@ evalExpr e =
       (evalExpr a) / (evalExpr b)
     Num a ->
       a
+
+exprToString : Expr -> String
+exprToString e =
+  case e of 
+    Add a b -> 
+      "(+ " ++ (exprToString a) ++ " " ++ (exprToString b) ++ ")"
+    Sub a b -> 
+      "(- " ++ (exprToString a) ++ " " ++ (exprToString b) ++ ")"
+    Mult a b -> 
+      "(* " ++ (exprToString a) ++ " " ++ (exprToString b) ++ ")"
+    Div a b -> 
+      "(/ " ++ (exprToString a) ++ " " ++ (exprToString b) ++ ")"
+    Num a ->
+      "(" ++ (toString a) ++ ")"
+
 
 empty : Model
 empty =
@@ -128,7 +194,7 @@ update msg model =
       AddCol ->
         ( { model | data = addCol sheet }, Cmd.none )
       ChangeValue c s ->
-        ( { model | data = set sheet c (Label s) }, Cmd.none )
+        ( { model | data = interpretInput s |> set sheet c }, Cmd.none )
       ChangeMode m ->
         ( { model | mode = m }, Cmd.none )
       Reset -> 
@@ -145,6 +211,16 @@ evalCell c =
     Formula e ->
       evalExpr e
         |> toString
+    Label s ->
+      s
+
+printCell : Cell -> String
+printCell c =
+  case c of
+    Empty ->
+      ""
+    Formula e ->
+      "=" ++ (exprToString e)
     Label s ->
       s
 
@@ -166,7 +242,7 @@ viewCell m coor c =
       ] 
       [ input 
         [ onInput (ChangeValue coor)
-        , evalCell c
+        , printCell c
           |> Attributes.value
         ]
         [] 
