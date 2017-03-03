@@ -4,7 +4,7 @@ import Html exposing (Html, program, div, table, tbody, tr, td, text, button, in
 import Html.Attributes as Attributes exposing (attribute, style)
 import Html.Events exposing (onClick, onDoubleClick, onInput)
 
-import List
+import List exposing (foldl)
 import String
 
 
@@ -21,9 +21,9 @@ type Msg
   | ChangeValue Coor String
 
 type Cell
- = Empty
- | Label String
- | Formula Expr
+  = Empty
+  | Label String
+  | Formula Expr
 
 type alias Coor = (Int, Int)
 
@@ -33,6 +33,7 @@ type Expr
   | Mult Expr Expr
   | Div Expr Expr
   | Num Float
+  | Ref Int Int
 
 
 type alias Spreadsheet = 
@@ -107,6 +108,31 @@ prepareSubFormula s =
     |> String.dropLeft 1
     |> String.dropRight 1
 
+openBrackets : String -> Int
+openBrackets s = 
+  let 
+    opening = String.toList s
+      |> List.map ((==) '(')
+      |> List.length
+    closing = String.toList s
+      |> List.map ((==) ')')
+      |> List.length
+  in
+    opening - closing
+
+buildSubstrs : String -> List String
+buildSubstrs s =
+  String.toList s
+    |> List.map toString
+    |> List.scanl (++) ""
+
+--splitToArguments : String -> (String, String)
+--splitToArguments s =
+--  let
+--    front = foldl (\a, b -> ) "" s
+--  in
+--    (front, back) -- todo: lookup the corresponding vocab to (head :: tail) if the front is a list
+
 {- okay, since the Parser package does not work with elm 0.18 atm and I don't really feel like going back to 0.17 
   i'll just write a old fashioned recursive function
 -}
@@ -133,6 +159,7 @@ interpretInput s =
     Just ('=', rest) ->
       let 
         parsed = parseFormula rest
+          --|> prepareSubFormula
       in 
         case parsed of
           Nothing ->
@@ -144,19 +171,29 @@ interpretInput s =
     Nothing ->
       Empty
 
-evalExpr : Expr -> Float
-evalExpr e =
+
+evalExpr : Spreadsheet -> Expr -> Float
+evalExpr s e =
   case e of 
     Add a b -> 
-      (evalExpr a) + (evalExpr b)
+      (evalExpr s a) + (evalExpr s b)
     Sub a b -> 
-      (evalExpr a) - (evalExpr b)
+      (evalExpr s a) - (evalExpr s b)
     Mult a b -> 
-      (evalExpr a) * (evalExpr b)
+      (evalExpr s a) * (evalExpr s b)
     Div a b -> 
-      (evalExpr a) / (evalExpr b)
+      (evalExpr s a) / (evalExpr s b)
     Num a ->
       a
+    Ref x y ->
+      let
+        c = get s (x, y)
+      in
+        case c of 
+          Formula a ->
+            evalExpr s a
+          _ ->
+            0 -- TODO find out how to throw errors or shoudl this fail silently?
 
 exprToString : Expr -> String
 exprToString e =
@@ -171,6 +208,8 @@ exprToString e =
       "(/ " ++ (exprToString a) ++ " " ++ (exprToString b) ++ ")"
     Num a ->
       "(" ++ (toString a) ++ ")"
+    Ref x y ->
+      "Ref" ++ (toString x) ++ " " ++ (toString y)
 
 
 empty : Model
@@ -203,13 +242,13 @@ update msg model =
         ( model, Cmd.none ) 
 
 
-evalCell : Cell -> String
-evalCell c =
+evalCell : Spreadsheet -> Cell -> String
+evalCell sheet c =
   case c of
     Empty ->
       ""
     Formula e ->
-      evalExpr e
+      evalExpr sheet e
         |> toString
     Label s ->
       s
@@ -224,15 +263,15 @@ printCell c =
     Label s ->
       s
 
-viewCell: Mode -> Coor -> Cell -> Html Msg
-viewCell m coor c =
+viewCell: Spreadsheet -> Mode -> Coor -> Cell -> Html Msg
+viewCell sheet m coor c =
   case m of
     View ->
      td 
       [ style [ ("padding", "10px") ] 
       , onDoubleClick (ChangeMode Edit)
       ] 
-      [ evalCell c
+      [ evalCell sheet c
         |> text
       ] 
     Edit ->
@@ -256,7 +295,7 @@ viewCells model x =
     cols = List.range 1 s.cols
     getVal = 
       \y-> get s (x, y)
-        |> viewCell model.mode (x, y)
+        |> viewCell model.data model.mode (x, y)
   in
     tr [] (List.map getVal cols)
 
