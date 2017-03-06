@@ -112,10 +112,10 @@ openBrackets : String -> Int
 openBrackets s = 
   let 
     opening = String.toList s
-      |> List.map ((==) '(')
+      |> List.filter ((==) '(')
       |> List.length
     closing = String.toList s
-      |> List.map ((==) ')')
+      |> List.filter ((==) ')')
       |> List.length
   in
     opening - closing
@@ -124,7 +124,9 @@ buildSubstrs : String -> List String
 buildSubstrs s =
   String.toList s
     |> List.map toString
+    |> List.map (\a -> String.dropRight 1 a |> String.dropLeft 1)
     |> List.scanl (++) ""
+    |> List.map String.reverse
 
 --splitToArguments : String -> (String, String)
 --splitToArguments s =
